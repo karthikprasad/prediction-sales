@@ -6,18 +6,17 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 import time
 
-# Feature Engineering
-def build_features(features, data):
+DATA_DIR = '../data/'
 
+# Feature Engineering
+def build_features(data):
     # Replace missing data with 0
 
     data.loc[data.Open.isnull(), 'Open'] = 1
     data.fillna(0, inplace=True)
 
     # Use following features directly
-    #features.extend(['Store', 'CompDistBins', 'CompOpenBins', 'Promo', 'StoreType', 'Promo2', 'SchoolHoliday', 'Assortment',\
-    #                 'StateHoliday', 'State'])
-
+    features = []
     features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StoreType', 'Assortment',\
                      'StateHoliday', 'State', 'CompetitionOpen'])
 
@@ -33,7 +32,7 @@ def build_features(features, data):
     data.StateHoliday.replace(mappings, inplace=True)
 
     # Mapping from state names to numbers
-    state_mappings = {"HB,NI": 0, "HH": 1, "TH": 2, "RP": 3, "ST": 4, "BW": 5, "SN": 6, "BE": 7, "HE": 8, "SH": 9, "BY": 10, "NW": 11}
+    state_mappings = {'HB,NI': 0, 'HH': 1, 'TH': 2, 'RP': 3, 'ST': 4, 'BW': 5, 'SN': 6, 'BE': 7, 'HE': 8, 'SH': 9, 'BY': 10, 'NW': 11}
     data.State.replace(state_mappings, inplace=True)
 
     # Extracting the date features from Date
@@ -74,20 +73,19 @@ def build_features(features, data):
                 data.loc[(data.monthStr == month) & (data.PromoInterval == interval),\
                          'IsPromoMonth'] = 1
 
-    return data
+    return data, features
+
 
 # Calculate the Root Mean Square Percentage Error
 def rmspe(exp, pred):
-
     return np.sqrt(np.mean(((exp - pred)/exp) ** 2))
+
 
 ## Start of main script
 def main():
-
     print("Extract the Training, Test, Store and States csv file")
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 170)
-
     types = {'CompetitionOpenSinceYear': np.dtype(int),
              'CompetitionOpenSinceMonth': np.dtype(int),
              'StateHoliday': np.dtype(str),
@@ -95,12 +93,12 @@ def main():
              'SchoolHoliday': np.dtype(int),
              'PromoInterval': np.dtype(str)}
 
-    train = pd.read_csv("train.csv", parse_dates=[2], dtype=types)
-    test = pd.read_csv("test.csv", parse_dates=[3], dtype=types)
-    store = pd.read_csv("store.csv")
-    store_states = pd.read_csv("store_states.csv")
+    train = pd.read_csv(DATA_DIR+'train.csv', parse_dates=[2], dtype=types)
+    test = pd.read_csv(DATA_DIR+'test.csv', parse_dates=[3], dtype=types)
+    store = pd.read_csv(DATA_DIR+'store.csv')
+    store_states = pd.read_csv(DATA_DIR+'store_states.csv')
 
-    print "\nMerging Training and Test CSV with Store and State CSV"
+    print '\nMerging Training and Test CSV with Store and State CSV'
     train = pd.merge(train, store, on='Store')
     train = pd.merge(train, store_states, on='Store')
     test = pd.merge(test, store, on='Store')
@@ -110,29 +108,32 @@ def main():
     #print test[test.Open == 0]
     #exit()
 
-    print "\nPrinting training data without building features"
+    print '\nPrinting training data without building features'
+    print train.tail(2)
+
+    print '\nAdding and modifying the features of train and test data'
+    train, features = build_features(train)
+    train[features + ['Sales']].to_csv('my_features.csv', index=False);
+    test, _ = build_features(test)
+    print 'Done'
+
+    #print '\nPrinting training data after building the features'
+    #print train[features].tail(2)
+    #print '############'
     #print train.tail(10)
+    #print train.describe()
+    #print '############'
+    #print train.info()
+    #print '############'
+    #print features
+    #print '############'
 
-    print "\nAdding and modifying the features of train and test data"
-    features = []
-    train = build_features(features, train)
-    test = build_features([], test)
-
-    '''
-    print "\nPrinting training data after building the features"
-    print train[features].tail(10)
-    print "############"
-    print train.tail(10)
-    print train.describe()
-    print "############"
-    print train.info()
-    '''
+    exit()
 
     # Including training data where sales is greater than zero
+    train = train[train['Sales'] > 0]
 
-    train = train[train["Sales"] > 0]
-
-    print "\nTraining the data with Random Forest Algorithm"
+    print '\nTraining the data with Random Forest Algorithm'
     x_train = train.drop(['Sales', 'Customers'], axis = 1)
     y_train = train.Sales
     y_train = np.log1p(y_train)
@@ -154,8 +155,9 @@ def main():
     ########################
     # Running the algorithm on trained data to make predictions
     ########################
+
+    print '\nRunning the algorithm on training data again'
     '''
-    print "\nRunning the algorithm on training data again"
     x_test = train.drop(['Sales'], axis = 1)
     x_test = x_train.head(100000)
 
@@ -167,7 +169,7 @@ def main():
     y_test  = np.asarray(y_test)
 
     print y_train
-    print "#######################"
+    print '#######################'
     print y_test
 
     error = rmspe(y_train, y_test)
