@@ -19,7 +19,7 @@ def build_features(features, data):
     #                 'StateHoliday', 'State'])
 
     features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StoreType', 'Assortment',\
-                     'StateHoliday', 'State'])
+                     'StateHoliday', 'State', 'CompetitionOpen'])
 
     # CompDistance : cut it into bins and add the columns to data
     #compds = pd.qcut(data['CompetitionDistance'], 10, labels=[0,1,2,3,4,5,6,7,8,9])
@@ -135,13 +135,14 @@ def main():
     print "\nTraining the data with Random Forest Algorithm"
     x_train = train.drop(['Sales', 'Customers'], axis = 1)
     y_train = train.Sales
+    y_train = np.log1p(y_train)
 
     ############################
     # Training the RF algorithm
     ############################
 
     # Note - n_estimators refers to number of trees. More the number, more will be the running time.
-    rf = RandomForestRegressor(n_jobs = -1, n_estimators = 10)
+    rf = RandomForestRegressor(n_jobs = -1, n_estimators = 100)
     rf.fit(x_train[features], y_train)
 
     # Printing the importance of individual features
@@ -184,12 +185,12 @@ def main():
             test[col] = np.zeros(test.shape[0])
 
     test = test.sort_index(axis=1).set_index('Id')
-    print('Running the RF algorithm on test data')
+    print('\nRunning the RF algorithm on test data')
 
     # Make predictions
     X_test = test.drop(['Sales', 'Customers'], axis=1)
     y_test = rf.predict(X_test[features])
-
+    y_test = np.asarray(np.expm1(y_test ))
     # Make Submission
     result = pd.DataFrame({'Id': test.index.values, 'Sales': y_test}).set_index('Id')
     result = result.sort_index()
