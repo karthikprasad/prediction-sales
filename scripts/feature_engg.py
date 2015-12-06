@@ -7,12 +7,13 @@ from sklearn.ensemble import RandomForestRegressor
 DATA_DIR = '../data/'
 
 # Feature Engineering
-def build_features(features, data):
+def build_features(data):
     # Replace missing data with 0
     data.fillna(0, inplace=True)
     data.loc[data.Open.isnull(), 'Open'] = 1
 
     # Use following features directly
+    features = []
     features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StoreType', 'Assortment',\
                      'StateHoliday', 'State'])
 
@@ -59,7 +60,7 @@ def build_features(features, data):
                 data.loc[(data.monthStr == month) & (data.PromoInterval == interval),\
                          'IsPromoMonth'] = 1
 
-    return data
+    return data, features
 
 
 # Calculate the Root Mean Square Percentage Error
@@ -91,24 +92,24 @@ def main():
     test = pd.merge(test, store_states, on='Store')
 
     print '\nPrinting training data without building features'
-    print train.tail(10)
+    print train.tail(2)
 
     print '\nAdding and modifying the features of train and test data'
-    features = []
-    train = build_features(features, train)
-    train.to_csv('my_features.csv');
-    test = build_features([], test)
+    train, features = build_features(train)
+    train[features + ['Sales']].to_csv('my_features.csv', index=False);
+    test, _ = build_features(test)
+    print 'Done'
 
-    print '\nPrinting training data after building the features'
-    print train[features].tail(10)
-    print '############'
-    print train.tail(10)
+    #print '\nPrinting training data after building the features'
+    #print train[features].tail(2)
+    #print '############'
+    #print train.tail(10)
     #print train.describe()
     #print '############'
     #print train.info()
-    print '############'
-    print features
-    print '############'
+    #print '############'
+    #print features
+    #print '############'
 
     exit()
 
