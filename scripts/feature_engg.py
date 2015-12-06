@@ -3,19 +3,27 @@ import pandas as pd
 import numpy as np
 from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.svm import SVR
+import time
 
 DATA_DIR = '../data/'
 
 # Feature Engineering
 def build_features(data):
     # Replace missing data with 0
-    data.fillna(0, inplace=True)
+
     data.loc[data.Open.isnull(), 'Open'] = 1
+    data.fillna(0, inplace=True)
 
     # Use following features directly
     features = []
     features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StoreType', 'Assortment',\
-                     'StateHoliday', 'State'])
+                     'StateHoliday', 'State', 'CompetitionOpen'])
+
+    # CompDistance : cut it into bins and add the columns to data
+    #compds = pd.qcut(data['CompetitionDistance'], 10, labels=[0,1,2,3,4,5,6,7,8,9])
+    #compDB = compds.to_frame(name='CompDistBins')
+    #data = pd.merge(data, compDB, left_index=True, right_index=True)
 
     # Mapping data of following features to numbers
     mappings = {'0':0, 'a':1, 'b':2, 'c':3, 'd':4}
@@ -36,9 +44,14 @@ def build_features(data):
     data['WeekOfYear'] = data.Date.dt.weekofyear
 
     # Extracting Competitor's data and promo data
-    features.append('CompetitionOpen')
+    #features.append('CompetitionOpen')
     data['CompetitionOpen'] = 12 * (data.Year - data.CompetitionOpenSinceYear) + \
         (data.Month - data.CompetitionOpenSinceMonth)
+
+    # CompDistance : cut it into bins and add the columns to data
+    #compos = pd.qcut(data['CompetitionOpen'], 5, labels=[0,1,2,3,4])
+    #compoB = compos.to_frame(name='CompOpenBins')
+    #data = pd.merge(data, compoB, left_index=True, right_index=True)
 
     features.append('PromoOpen')
     data['PromoOpen'] = 12 * (data.Year - data.Promo2SinceYear) + \
@@ -70,7 +83,7 @@ def rmspe(exp, pred):
 
 ## Start of main script
 def main():
-    print('Extract the Training, Test, Store and States csv file')
+    print("Extract the Training, Test, Store and States csv file")
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 170)
     types = {'CompetitionOpenSinceYear': np.dtype(int),
@@ -90,6 +103,10 @@ def main():
     train = pd.merge(train, store_states, on='Store')
     test = pd.merge(test, store, on='Store')
     test = pd.merge(test, store_states, on='Store')
+    test1 = test
+
+    #print test[test.Open == 0]
+    #exit()
 
     print '\nPrinting training data without building features'
     print train.tail(2)
@@ -119,20 +136,35 @@ def main():
     print '\nTraining the data with Random Forest Algorithm'
     x_train = train.drop(['Sales', 'Customers'], axis = 1)
     y_train = train.Sales
+    y_train = np.log1p(y_train)
 
-    rf = RandomForestRegressor(n_jobs = -1, n_estimators = 15)
+    ############################
+    # Training the RF algorithm
+    ############################
+
+    # Note - n_estimators refers to number of trees. More the number, more will be the running time.
+    rf = RandomForestRegressor(n_jobs = -1, n_estimators = 100)
     rf.fit(x_train[features], y_train)
+
+    # Printing the importance of individual features
+    f_imp = rf.feature_importances_
+    for imp, f in zip(f_imp, features):
+        print str(f) + "\t->\t" + str(imp)
+    #exit()
 
     ########################
     # Running the algorithm on trained data to make predictions
     ########################
 
     print '\nRunning the algorithm on training data again'
+    '''
     x_test = train.drop(['Sales'], axis = 1)
     x_test = x_train.head(100000)
 
     y_test = rf.predict(x_test[features])
 
+
+    y_train = train.Sales
     y_train = np.asarray(y_train.head(100000).tolist())
     y_test  = np.asarray(y_test)
 
@@ -142,9 +174,9 @@ def main():
 
     error = rmspe(y_train, y_test)
     print error
-
-
+    exit()
     '''
+
     ########################
     # Running the algorithm on Original test data for Kaggle Competition
     ########################
@@ -155,18 +187,23 @@ def main():
             test[col] = np.zeros(test.shape[0])
 
     test = test.sort_index(axis=1).set_index('Id')
-    print('Running the RF algorithm on test data')
+    print('\nRunning the RF algorithm on test data')
 
     # Make predictions
     X_test = test.drop(['Sales', 'Customers'], axis=1)
     y_test = rf.predict(X_test[features])
-
+    y_test = np.asarray(np.expm1(y_test ))
     # Make Submission
     result = pd.DataFrame({'Id': test.index.values, 'Sales': y_test}).set_index('Id')
     result = result.sort_index()
+
+    # Replace sales with 0 value for stores which are not opened
+    xa = test1[test1.Open == 0]
+    result.loc[result.index.isin(xa.Id), 'Sales'] = 0
+
     result.to_csv('submission.csv')
     print('Created a csv file for submission')
-    '''
+
 
 if __name__ == '__main__':
     main()
