@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.cross_validation import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 
-DATA_DIR = '../data/'
+DATA_DIR = ''
 
 def read_data():
     print('Extract the Training, Test, Store and States csv file')
@@ -55,11 +55,18 @@ def engineer_data(data):
 
     print 'hey 1'
     # Extracting the date features from Date
-    features.extend(['Month', 'Year'])
+    features.extend(['Store', 'Promo2', 'Year', 'Day'])
     data['Year'] = data.Date.dt.year
     data['Month'] = data.Date.dt.month
-    month_imp_mapping = {12:12, 11:7, 10:11, 9:3, 8:8, 7:2, 6:4, 5:10, 4:6, 3:9, 2:5, 1:1}
-    data.Month.replace(month_imp_mapping, inplace=True)
+    #month_imp_mapping = {12:12, 11:7, 10:11, 9:3, 8:8, 7:2, 6:4, 5:10, 4:6, 3:9, 2:5, 1:1}
+
+    for x in range(1,13):
+        features.append('Month' + str(x+1))
+        data['Month' + str(x+1)] = data.Month.map(lambda y: 1 if y == x else 0)
+
+    #data.Month.replace(month_imp_mapping, inplace=True)
+    data['Day'] = data.Date.dt.day
+
     print 'hey 2'
     # Add QuarterOfMonth
     features.append('QuarterOfMonth')
@@ -88,7 +95,8 @@ def engineer_data(data):
     print 'hey 7'
     # TODO: convert compdist to log scale
 
-    features.append('CompetitionOpen')
+
+    features.extend(['CompetitionOpen', 'CompetitionDistance'])
     data['CompetitionOpen'] = 12 * (data.Year - data.CompetitionOpenSinceYear) + \
         (data.Month - data.CompetitionOpenSinceMonth)
     data['CompetitionOpen'] = data.CompetitionOpen.apply(lambda x: x if x > 0 else 0)
@@ -118,6 +126,12 @@ def engineer_data(data):
     state_mappings = {'HB,NI': 0, 'HH': 1, 'TH': 2, 'RP': 3, 'ST': 4, 'BW': 5, 'SN': 6, 'BE': 7, 'HE': 8, 'SH': 9, 'BY': 10, 'NW': 11}
     data.State.replace(state_mappings, inplace=True)
 
+    #compds = pd.qcut(data['CompetitionDistance'], 30, labels=range(0,30))
+    #compDB = compds.to_frame(name='CompDistBins')
+    #data = pd.merge(data, compDB, left_index=True, right_index=True)
+
+    data.fillna(0, inplace=True)
+
     return data, features
 
 
@@ -140,6 +154,7 @@ def remove_outliers(data):
 def random_forest(train, test, features, num_trees = 20):
     x_train = train[features]
     y_train = train.Sales
+    print "Training the data with Random Forest Algorithm"
     rf = RandomForestRegressor(n_jobs = -1, n_estimators = num_trees)
     rf.fit(x_train[features], y_train)
 
@@ -157,7 +172,7 @@ def random_forest(train, test, features, num_trees = 20):
 
     # Make predictions
     #X_test = test.drop(['Sales', 'Customers'], axis=1)
-    y_test = rf.predict(X_test[features])
+    y_test = rf.predict(test[features])
     y_test = np.asarray(np.expm1(y_test))
     # Make Submission
     result = pd.DataFrame({'Id': test.index.values, 'Sales': y_test}).set_index('Id')
@@ -165,7 +180,9 @@ def random_forest(train, test, features, num_trees = 20):
 
     # Replace sales with 0 value for stores which are not opened
     closed_stores = test[test.Open == 0]
-    result.loc[result.index.isin(closed_stores.Id), 'Sales'] = 0
+    #print closed_stores
+    #print result
+    result.loc[result.index.isin(closed_stores.index), 'Sales'] = 0
 
     result.to_csv('submission.csv')
     print('Created a csv file for submission')
@@ -173,4 +190,6 @@ def random_forest(train, test, features, num_trees = 20):
 train, test = read_data()
 train = remove_outliers(train)
 data, features = engineer_data(train)
+test, _ = engineer_data(test)
+random_forest(data, test, features, 80)
 
