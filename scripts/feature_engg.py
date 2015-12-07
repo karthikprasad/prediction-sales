@@ -6,47 +6,68 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 import time
 
-DATA_DIR = '../data/'
+DATA_DIR = ''
 
 # Feature Engineering
 def build_features(data):
-    # Replace missing data with 0
 
+    # Replace missing data with 0
     data.loc[data.Open.isnull(), 'Open'] = 1
     data.fillna(0, inplace=True)
 
     # Use following features directly
     features = []
-    features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StoreType', 'Assortment',\
-                     'StateHoliday', 'State', 'CompetitionOpen'])
+    #features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StoreType', 'Assortment',\
+    #                 'StateHoliday', 'State', 'CompetitionOpen'])
 
     # CompDistance : cut it into bins and add the columns to data
     #compds = pd.qcut(data['CompetitionDistance'], 10, labels=[0,1,2,3,4,5,6,7,8,9])
     #compDB = compds.to_frame(name='CompDistBins')
     #data = pd.merge(data, compDB, left_index=True, right_index=True)
 
+    features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday', 'StateHoliday', \
+                     'State', 'CompetitionOpen'])
+
     # Mapping data of following features to numbers
     mappings = {'0':0, 'a':1, 'b':2, 'c':3, 'd':4}
-    data.StoreType.replace(mappings, inplace=True)
-    data.Assortment.replace(mappings, inplace=True)
+    #data.StoreType.replace(mappings, inplace=True)
+
+    for x in ['a', 'b', 'c', 'd']:
+        features.append('StoreType' + x)
+        data['StoreType' + x] = data['StoreType'].map(lambda y: 1 if y == x else 0)
+
+    for x in ['a', 'b', 'c']:
+        features.append('Assortment' + x)
+        data['Assortment' + x] = data['Assortment'].map(lambda y: 1 if y == x else 0)
+
+
+
+    #data.Assortment.replace(mappings, inplace=True)
     data.StateHoliday.replace(mappings, inplace=True)
 
     # Mapping from state names to numbers
-    state_mappings = {'HB,NI': 0, 'HH': 1, 'TH': 2, 'RP': 3, 'ST': 4, 'BW': 5, 'SN': 6, 'BE': 7, 'HE': 8, 'SH': 9, 'BY': 10, 'NW': 11}
+    state_mappings = {'HB,NI': 0, 'HH': 1, 'TH': 2, 'RP': 3, 'ST': 4, 'BW': 5, 'SN': 6, 'BE': 7, 'HE': 8, 'SH': 9,\
+                      'BY': 10, 'NW': 11}
     data.State.replace(state_mappings, inplace=True)
 
     # Extracting the date features from Date
-    features.extend(['DayOfWeek', 'Month', 'Day', 'Year', 'WeekOfYear'])
+    features.extend(['Month', 'Day', 'Year', 'WeekOfYear'])
     data['Year'] = data.Date.dt.year
     data['Month'] = data.Date.dt.month
     data['Day'] = data.Date.dt.day
-    data['DayOfWeek'] = data.Date.dt.dayofweek
+    #data['DayOfWeek'] = data.Date.dt.dayofweek
     data['WeekOfYear'] = data.Date.dt.weekofyear
+
+    # Day of week
+    for x in [0,1,2,3,4,5,6]:
+        features.append('DayOfWeek' + str(x))
+        data['DayOfWeek' + str(x)] = data.Date.dt.dayofweek.map(lambda y: 1 if y == x else 0)
 
     # Extracting Competitor's data and promo data
     #features.append('CompetitionOpen')
     data['CompetitionOpen'] = 12 * (data.Year - data.CompetitionOpenSinceYear) + \
         (data.Month - data.CompetitionOpenSinceMonth)
+    data['CompetitionOpen'] = data.CompetitionOpen.apply(lambda x: x if x > 0 else 0)
 
     # CompDistance : cut it into bins and add the columns to data
     #compos = pd.qcut(data['CompetitionOpen'], 5, labels=[0,1,2,3,4])
@@ -115,7 +136,7 @@ def main():
     train, features = build_features(train)
     train[features + ['Sales']].to_csv('my_features.csv', index=False);
     test, _ = build_features(test)
-    print 'Done'
+    #print 'Done'
 
     #print '\nPrinting training data after building the features'
     #print train[features].tail(2)
@@ -128,7 +149,7 @@ def main():
     #print features
     #print '############'
 
-    exit()
+    #exit()
 
     # Including training data where sales is greater than zero
     train = train[train['Sales'] > 0]
@@ -141,7 +162,7 @@ def main():
     ############################
     # Training the RF algorithm
     ############################
-
+    print features
     # Note - n_estimators refers to number of trees. More the number, more will be the running time.
     rf = RandomForestRegressor(n_jobs = -1, n_estimators = 100)
     rf.fit(x_train[features], y_train)
@@ -152,12 +173,13 @@ def main():
         print str(f) + "\t->\t" + str(imp)
     #exit()
 
+    '''
     ########################
     # Running the algorithm on trained data to make predictions
     ########################
 
     print '\nRunning the algorithm on training data again'
-    '''
+
     x_test = train.drop(['Sales'], axis = 1)
     x_test = x_train.head(100000)
 
@@ -167,6 +189,7 @@ def main():
     y_train = train.Sales
     y_train = np.asarray(y_train.head(100000).tolist())
     y_test  = np.asarray(y_test)
+    y_test = np.asarray(np.expm1(y_test))
 
     print y_train
     print '#######################'
@@ -176,7 +199,6 @@ def main():
     print error
     exit()
     '''
-
     ########################
     # Running the algorithm on Original test data for Kaggle Competition
     ########################
