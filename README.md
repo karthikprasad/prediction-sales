@@ -1,4 +1,4 @@
-Prediction of Sales of Rossmann Stores using Ensemble of Regressors
+#Prediction of Sales of Rossmann Stores using Ensemble of Regressors
 
 The project was an attempt at solving the Machine Learning and Data Mining problems of the real world. The ML Challenge was selected from Kaggle (https://www.kaggle.com/c/rossmann-store-sales)
 
